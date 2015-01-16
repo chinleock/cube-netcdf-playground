@@ -5,9 +5,14 @@ Space Time Cube, or Cube, is developed by Esri Spatial Statistics Team, trying t
 This Github repository is about some experiments to discover what can Cube do, and what's the capability of NetCDF4-Python can achieve.
 
 ## Required Packages
+Numpy with MKL
+
 [NetCDF4-Python API](http://netcdf4-python.googlecode.com/svn/trunk/docs/netCDF4-module.html)
 
+## Optional Packages
+...Depands on each script files
 [ArcGIS Desktop](http://www.esri.com/software/arcgis/arcgis-for-desktop)
+[Pymc](https://pypi.python.org/pypi/pymc)
 
 ## Scripts
 * Experiment_cube_size_by_dimension.py: 
