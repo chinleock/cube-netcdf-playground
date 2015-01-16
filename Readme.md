@@ -11,7 +11,9 @@ Numpy with MKL
 
 ## Optional Packages
 ...Depands on each script files
+
 [ArcGIS Desktop](http://www.esri.com/software/arcgis/arcgis-for-desktop)
+
 [Pymc](https://pypi.python.org/pypi/pymc)
 
 ## Scripts
