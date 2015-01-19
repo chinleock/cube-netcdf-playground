@@ -23,6 +23,4 @@ Numpy with MKL
 
 * Utilities_netcdf_cube_convertor: 
 
-   An utility tool to help convert an netCDF file with 3-Dim data to a Cube format, which can be used in Esri [Space Time Pattern Mining Toolbox](http://desktop.arcgis.com/en/desktop/latest/tools/space-time-pattern-mining-toolbox/an-overview-of-the-space-time-pattern-mining-toolbox.htm)
-
-An ongoing project
+   An utility tool to help convert an netCDF file with 3-Dim data to a Cube format, which can be used in Esri [Space Time Pattern Mining Toolbox](http://desktop.arcgis.com/en/desktop/latest/tools/space-time-pattern-mining-toolbox/an-overview-of-the-space-time-pattern-mining-toolbox.htm). An ongoing project
