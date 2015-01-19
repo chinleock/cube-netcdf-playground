@@ -1,16 +1,39 @@
-import arcpy as ARCPY
-import netCDF4 as NET
-from os import path as PATH
-import SSUtilities as UTILS
-import datetime as DT
-import numpy as NUM
-import time as TIME
+"""
+This script is a library to support converting an existing netcdf file to 
+Esri Space Time Cube, which contains 3 classes: 
+    CubeInfoRetriever: Retrieve Space Time Cube required info from netcdf file.
+    CubeBuilder      : Construct a Space Time Cube based on the retrieved info.
+    CubeSpatialRef   : Restructure the Spatial Reference for Space Time Cube.
 
-TimeUnitConverter = {"SECONDS":1, "MINUTES":60, "HOURS": 3600, "DAYS": 86400, "WEEKS": 604800}
+Created by Leo Chin, 1/10/2015
+"""
+################################## Imports ####################################
+import arcpy as ARCPY
+import datetime as DT
+import netCDF4 as NET
+import numpy as NUM
+import SSUtilities as UTILS
+import time as TIME
+from os import path as PATH
+
+################################# Global Dictionary ###########################
+TimeUnitConverter = {"SECONDS":1, "MINUTES":60, "HOURS": 3600, "DAYS": 86400,
+                     "WEEKS": 604800}
+
+#### Enable Overwrite Output ####
 ARCPY.env.overwriteOutput = True
 
+################################# Classes #####################################
 class CubeInfoRetriever(object):
+    """
+    INPUT:
+    
+    OUTPUT:
+    
+    ATTRIBUTE:
+    """
     def __init__(self, rawFile):
+        #### Runtime Check for Input NetCDF File Existence ####
         if PATH.exists(rawFile):
             extension = PATH.splitext(rawFile)[1]
         else:
@@ -89,7 +112,7 @@ class CubeInfoRetriever(object):
             else:
                 missingValue = -9999
             correctDim = ("TIME" in dims) and ("LON" in dims) and ("LAT" in dims)
-            if vInfo.ndim == 3 and correctDim:
+            if (vInfo.ndim == 3) and correctDim:
                 data = vInfo[:]
                 data[data==missingValue] = -9999
                 self.variables.append([var, vInfo.long_name, vInfo.dtype, data])
@@ -167,30 +190,41 @@ class CubeInfoRetriever(object):
         ## Generate Time Size Info String ##
         tmpSize = float(self.timeData[1] - self.timeData[0])
         self.timeSizeInfo = str(tmpSize) + " " + unit.title()
+
+        try:        
+            #### Create Date Time Object ####
+            startTimeObj = DT.datetime.strptime(dtString, '%Y-%m-%d %H:%M:%S')
         
-        #### Create Date Time Object ####
-        startTimeObj = DT.datetime.strptime(dtString, '%Y-%m-%d %H:%M:%S')
+            self.timeData *= TimeUnitConverter[unit.upper()]
     
-        self.timeData *= TimeUnitConverter[unit.upper()]
-        tmpSize = float(self.timeData[0])
-
-        ## Start Start Time ##
-        tmpSize = float(self.timeData[0])
-        startStartTime = (startTimeObj + DT.timedelta(seconds = tmpSize)).isoformat().replace("T", " ")
-
-        ## Start End Time ##
-        tmpSize = float(self.timeData[1])
-        startEndTime = (startTimeObj + DT.timedelta(seconds = tmpSize)).isoformat().replace("T", " ")
-        ## End Start Time ##
-        tmpSize = float(self.timeData[-2])
-        endStartTime = (startTimeObj + DT.timedelta(seconds = tmpSize)).isoformat().replace("T", " ")
-        ## End End Time ##
-        tmpSize = float(self.timeData[-1])
-        endEndTime = (startTimeObj + DT.timedelta(seconds = tmpSize)).isoformat().replace("T", " ")
-        ## Start End Time String ##
-        self.startEndTimeInfo = startStartTime + ";" + startEndTime + ";" + endStartTime + ";" + endEndTime
-        ## Adjust self.timeData[] to Start from 0 ##
-        self.timeData -= self.timeData[0]
+            ## Start Start Time ##
+            tmpSize = float(self.timeData[0])
+            tmpDTObject = startTimeObj + DT.timedelta(seconds = tmpSize)
+            startStartTime = tmpDTObject.isoformat().replace("T", " ")
+    
+            ## Start End Time ##
+            tmpSize = float(self.timeData[1])
+            tmpDTObject = startTimeObj + DT.timedelta(seconds = tmpSize)
+            startEndTime = tmpDTObject.isoformat().replace("T", " ")
+            ## End Start Time ##
+            tmpSize = float(self.timeData[-2])
+            tmpDTObject = startTimeObj + DT.timedelta(seconds = tmpSize)
+            endStartTime = tmpDTObject.isoformat().replace("T", " ")
+            ## End End Time ##
+            tmpSize = float(self.timeData[-1])
+            tmpDTObject = startTimeObj + DT.timedelta(seconds = tmpSize)
+            endEndTime = tmpDTObject.isoformat().replace("T", " ")
+            ## Start End Time String ##
+            self.startEndTimeInfo = startStartTime + ";" + startEndTime + ";" 
+            self.startEndTimeInfo += endStartTime + ";" + endEndTime
+            ## Adjust self.timeData[] to Start from 0 ##
+            self.timeData -= self.timeData[0]
+        except OverflowError:
+            msg = "The date value is out of range. "
+            msg += "Check the time variable in your netcdf."
+            ARCPY.AddError(msg)
+            rawDataset.close()
+            raise SystemExit()
         
         #### Verifying Info Retrieved from File Is Sufficient for Cube ####
         if flagTime == 0 or ((flagLon * flagLat) < 1):
@@ -202,36 +236,60 @@ class CubeInfoRetriever(object):
         rawDataset.close()
 
 class CubeBuilder(object):
+    """
+    INPUT:
+    
+    OUTPUT:
+    
+    ATTRIBUTE:
+    """
+    
     def __init__(self, location, numRows, numCols, numTime, extent = None, 
                  extentInDegree = None, cellSizeInfo = "", userCellSizeInfo = "",
                  cellSizeInfoLon = "", cellSizeInfoLat = "", timeSizeInfo = "", 
                  startEndTimeInfo = "", variables = [], timeData = [], 
                  spatialRef = None, mask = None):
+        #### Set Input Parameters to Global ####
         UTILS.assignClassAttr(self, locals())
+        
+        #### Initialize Output Cube File ####
         try:
             self.cube = NET.Dataset(location, 'w')
         except:
             ARCPY.AddIDMessage("ERROR", 110014)
             raise SystemExit()
         
-        self.spatialRef = CubeSpatialRef(spatialRef = spatialRef, extentInDegree = extentInDegree)
+        #### Restructure Spatial Reference by CubeSpatialRef Class ####
+        self.spatialRef = CubeSpatialRef(spatialRef, extentInDegree)
+        
+        #### Cell Size and Cell Unit ####
         self.cellSize, self.cellUnit = cellSizeInfo.split()
         self.timeSize, self.timeUnit = timeSizeInfo.split()
         if self.userCellSizeInfo:
             self.userCellSize, self.userCellUnit = self.userCellSizeInfo.split()
         else:
             self.userCellSize = self.cellSize
-            self.userCellUnit = self.cellUnit
+            self.userCellUnit = self.cellUnit.title()
+            
+        #### Cell Size and Unit in Longitude and Latitude ####
         self.cellSizeLon = float(self.cellSizeInfoLon.split()[0])
         self.cellSizeLat = float(self.cellSizeInfoLat.split()[0])
         self.cellSize = float(self.cellSize)
         self.userCellSize = float(self.userCellSize)
         
+        #### Start-End Time Info ####
         self.startStartTime, self.startEndTime, self.endStartTime, self.endEndTime = self.startEndTimeInfo.split(";")
         
+        #### Set Global Attribute for Output Cube File ####
         self.setGlobalAttr()
+        
+        #### Create Dimension and Its Related Variables for Output Cube File ####
         self.createDimension()
+        
+        #### Process Time Variable in Output Cube File ####
         self.defineTemporalRef()
+        
+        #### Process Spatial Related Variables in Output Cube File ####
         self.defineSpatialRef()
         
         for var in self.variables:
@@ -481,20 +539,27 @@ class CubeBuilder(object):
                 longName = 'PORCESSION_BINARY_MASK_FOR_' + varName.upper()                
                 self.create2DVariable(dataset, maskName, longName, 'i', maskArray)
      
-    def createSupplementVariable(self):
+    def createSupplementVariable(self, dataset):
         sliceSize = self.numRows * self.numCols
         
         #### Time Step ID ####
         timeIDData = NUM.repeat(NUM.arange(0, self.numTime), sliceSize)
         timeIDData.shape = (self.numTime, self.numRows, self.numCols)
-        self.create3DVariable(self.cube, 'time_step_ID', 'TIME_STEO_ID', 'i4', timeIDData)
+        self.create3DVariable(dataset, 'time_step_ID', 'TIME_STEO_ID', 'i4', timeIDData)
                 
         #### Location ID ####
         locationData = NUM.tile(NUM.arange(0, sliceSize), self.numTime)
         locationData.shape = (self.numTime, self.numRows, self.numCols)
-        self.create3DVariable(self.cube, 'location_ID', 'LOCATION_ID', 'i4', locationData)
+        self.create3DVariable(dataset, 'location_ID', 'LOCATION_ID', 'i4', locationData)
         
 class CubeSpatialRef(object):
+    """
+    INPUT:
+    
+    OUTPUT:
+    
+    ATTRIBUTE:
+    """
     def __init__(self, spatialRef, ssdo = None, extent = None, 
                  extentInDegree = None):
         self.useLatLon = False
@@ -566,13 +631,3 @@ class CubeSpatialRef(object):
 
         return extentDegree
     
-if __name__ == '__main__':
-    ncFile = r'C:\DevWork\nc2cube\sresa1b_ncar_ccsm3_0_run1_200001.nc'
-    outputCube = r'C:\DevWork\nc2cube\cubeTest1.nc'
-    
-    cube = CubeInfoRetriever(ncFile)
-    cb = CubeBuilder(outputCube, cube.numRows, cube.numCols, 
-                     cube.numTime, cube.extent, cube.extentInDegree, 
-                     cube.cellSizeInfo, "500.33 Kilometers", cube.cellSizeInfoLon, 
-                     cube.cellSizeInfoLat, cube.timeSizeInfo, cube.startEndTimeInfo, 
-                     cube.variables, cube.timeData, cube.spatialRef, mask = None)

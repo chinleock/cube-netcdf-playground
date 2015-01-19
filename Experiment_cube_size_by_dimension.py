@@ -1,4 +1,4 @@
-'''
+"""
 This script is to test 
     1) with the same size of data, but specify different size of dimension, 
        how does the nc file size being changed according to dime size.
@@ -21,7 +21,7 @@ Test 2)
     
 
 Created by Leo Chin, 1/16/2015
-'''
+"""
 
 ################################### Import ####################################
 import netCDF4 as NET
